@@ -15,9 +15,7 @@ import express from "express";
 
 /* ================= HTTP 24/7 ================= */
 const app = express();
-app.get("/", (req, res) => {
-  res.send("Argentina RP Bot activo 24/7");
-});
+app.get("/", (req, res) => res.send("Argentina RP Bot 24/7 activo"));
 app.listen(process.env.PORT || 3000);
 
 /* ================= CLIENTE ================= */
@@ -55,17 +53,13 @@ const commands = [
 
   new SlashCommandBuilder()
     .setName("server")
-    .setDescription("Anuncios del servidor")
-    .addSubcommand(sub =>
-      sub.setName("activo").setDescription("Anunciar servidor activo")
-    )
-    .addSubcommand(sub =>
-      sub.setName("cerrado").setDescription("Anunciar servidor cerrado")
-    )
+    .setDescription("Estado del servidor")
+    .addSubcommand(s => s.setName("activo").setDescription("Anunciar servidor activo"))
+    .addSubcommand(s => s.setName("cerrado").setDescription("Anunciar servidor cerrado"))
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
 ].map(c => c.toJSON());
 
-/* ================= REGISTRAR SLASH ================= */
+/* ================= REGISTRAR COMANDOS ================= */
 const rest = new REST({ version: "10" }).setToken(TOKEN);
 
 (async () => {
@@ -73,12 +67,12 @@ const rest = new REST({ version: "10" }).setToken(TOKEN);
     Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
     { body: commands }
   );
-  console.log("✅ Comandos registrados correctamente");
+  console.log("✅ Comandos registrados");
 })();
 
 /* ================= READY ================= */
 client.once("ready", () => {
-  console.log(`🤖 Bot conectado como ${client.user.tag}`);
+  console.log(`🤖 Conectado como ${client.user.tag}`);
 });
 
 /* ================= INTERACCIONES ================= */
@@ -87,34 +81,37 @@ client.on(Events.InteractionCreate, async interaction => {
 
   const user = interaction.user;
 
-  /* AYUDA */
+  /* ================= AYUDA ================= */
   if (interaction.commandName === "ayuda") {
-    return interaction.reply({
-      content:
-        "🧠 **Comandos disponibles**\n\n" +
-        "• `/info`\n" +
-        "• `/roles`\n" +
-        "• `/ticket`\n" +
-        "• `/policia`\n" +
-        "• `/server activo`\n" +
-        "• `/server cerrado`",
-      ephemeral: true
-    });
+    const embed = new EmbedBuilder()
+      .setTitle("🧠 Ayuda | Argentina RP")
+      .setDescription("Estos son los comandos disponibles:")
+      .addFields(
+        { name: "/info", value: "Información del servidor" },
+        { name: "/roles", value: "Roles disponibles" },
+        { name: "/ticket", value: "Contactar al staff" },
+        { name: "/policia", value: "Ingreso a la policía" },
+        { name: "/server activo", value: "Anunciar servidor activo (staff)" },
+        { name: "/server cerrado", value: "Anunciar servidor cerrado (staff)" }
+      )
+      .setColor(0x3498db);
+
+    return interaction.reply({ embeds: [embed], ephemeral: true });
   }
 
-  /* INFO */
+  /* ================= INFO ================= */
   if (interaction.commandName === "info") {
     const embed = new EmbedBuilder()
       .setTitle("🇦🇷 Argentina RP")
-      .setDescription("Servidor de roleplay serio y activo.")
+      .setDescription("Servidor de roleplay serio, activo y organizado.")
       .addFields(
         {
-          name: "🎭 Roles disponibles",
-          value: "• Civil\n• Policía\n• Médico\n• ADAC\n• Abogado/Juez\n• Político"
+          name: "🎭 Roles",
+          value: "Civil\nPolicía\nMédico\nADAC\nAbogado/Juez\nPolítico"
         },
-        { name: "💡 Código del servidor", value: "`zaza1ajv`" }
+        { name: "🎮 Código", value: "`zaza1ajv`" }
       )
-      .setColor(0x2f80ed);
+      .setColor(0x2ecc71);
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
@@ -126,46 +123,75 @@ client.on(Events.InteractionCreate, async interaction => {
     return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
   }
 
-  /* SERVER */
+  /* ================= ROLES ================= */
+  if (interaction.commandName === "roles") {
+    const embed = new EmbedBuilder()
+      .setTitle("🎭 Roles Disponibles")
+      .setDescription(
+        "• Civil\n• Policía\n• Médico\n• ADAC\n• Abogado/Juez\n• Político"
+      )
+      .setColor(0xf1c40f);
+
+    return interaction.reply({ embeds: [embed], ephemeral: true });
+  }
+
+  /* ================= TICKET ================= */
+  if (interaction.commandName === "ticket") {
+    const embed = new EmbedBuilder()
+      .setTitle("🎫 Sistema de Tickets")
+      .setDescription(
+        "Para comunicarte con el staff abrí un ticket en el canal correspondiente."
+      )
+      .setColor(0xe67e22);
+
+    return interaction.reply({ embeds: [embed], ephemeral: true });
+  }
+
+  /* ================= POLICIA ================= */
+  if (interaction.commandName === "policia") {
+    const embed = new EmbedBuilder()
+      .setTitle("🚓 Ingreso a la Policía")
+      .setDescription(
+        "• Buen rol civil\n• Sin sanciones\n• DNI y licencia activa\n• Crear ticket Policía"
+      )
+      .setColor(0xe74c3c);
+
+    return interaction.reply({ embeds: [embed], ephemeral: true });
+  }
+
+  /* ================= SERVER ================= */
   if (interaction.commandName === "server") {
     const sub = interaction.options.getSubcommand();
-
-    const canalPublico =
-      sub === "activo"
-        ? await client.channels.fetch(CANAL_SERVER_ACTIVO)
-        : await client.channels.fetch(CANAL_SERVER_CERRADO);
-
     const canalLogs = await client.channels.fetch(CANAL_LOGS_SERVER);
 
     if (sub === "activo") {
-      await canalPublico.send(
-        "**¡Atención, jugadores de Argentina! 🎄🎁 ¡Grandes noticias! La República Argentina va a abrir el servidor para que todos puedan unirse y disfrutar de la mejor experiencia de juego. ¡Prepárense para formar equipos, competir y vivir aventuras épicas juntos!**\n\n" +
+      const canal = await client.channels.fetch(CANAL_SERVER_ACTIVO);
+
+      await canal.send(
+        "**¡Atención, jugadores de Argentina! 🎄🎁 ¡Grandes noticias!**\n\n" +
+        "El servidor está **ABIERTO** para todos.\n\n" +
         "||@everyone|| 🌟\n\n" +
-        "🎮 **Código:** `zaza1ajv`\n" +
+        "🎮 Código: `zaza1ajv`\n" +
         "🔗 " + LINK_JUEGO
       );
 
       await canalLogs.send(
-        `🟢 **Servidor ABIERTO**\n` +
-        `👤 Usuario: ${user} (${user.tag})\n` +
-        `🕒 Fecha: <t:${Math.floor(Date.now() / 1000)}:F>`
+        `🟢 Servidor ABIERTO\n👤 ${user.tag}\n🕒 <t:${Math.floor(Date.now()/1000)}:F>`
       );
 
       return interaction.reply({ content: "✅ Servidor anunciado como ACTIVO", ephemeral: true });
     }
 
-    await canalPublico.send(
-      "🌙✨ **MUY BUENAS NOCHES, ARGENTINA RP 🇦🇷🔥**\n\n" +
-      "El servidor se encuentra **cerrado por hoy** ⛔\n\n" +
-      "Gracias a todos por el rol de hoy ❤️\n" +
-      "🔔 Mañana volvemos con todo.\n\n" +
-      "**¡Buenas noches!** 🌌"
+    const canal = await client.channels.fetch(CANAL_SERVER_CERRADO);
+
+    await canal.send(
+      "🌙✨ **Buenas noches Argentina RP**\n\n" +
+      "El servidor ya se encuentra **cerrado por hoy** ⛔\n\n" +
+      "Gracias por el rol ❤️\nNos vemos mañana 🇦🇷"
     );
 
     await canalLogs.send(
-      `🔴 **Servidor CERRADO**\n` +
-      `👤 Usuario: ${user} (${user.tag})\n` +
-      `🕒 Fecha: <t:${Math.floor(Date.now() / 1000)}:F>`
+      `🔴 Servidor CERRADO\n👤 ${user.tag}\n🕒 <t:${Math.floor(Date.now()/1000)}:F>`
     );
 
     return interaction.reply({ content: "✅ Servidor anunciado como CERRADO", ephemeral: true });
@@ -174,4 +200,3 @@ client.on(Events.InteractionCreate, async interaction => {
 
 /* ================= LOGIN ================= */
 client.login(TOKEN);
-
