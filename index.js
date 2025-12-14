@@ -4,10 +4,6 @@ import {
   REST,
   Routes,
   SlashCommandBuilder,
-  EmbedBuilder,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
   PermissionFlagsBits,
   Events
 } from "discord.js";
@@ -15,9 +11,7 @@ import express from "express";
 
 /* ================= HTTP 24/7 ================= */
 const app = express();
-app.get("/", (req, res) => {
-  res.send("Argentina RP Bot activo 24/7");
-});
+app.get("/", (req, res) => res.send("Argentina RP Bot activo 24/7"));
 app.listen(process.env.PORT || 3000);
 
 /* ================= CLIENTE ================= */
@@ -26,38 +20,13 @@ const client = new Client({
 });
 
 /* ================= VARIABLES ================= */
-const {
-  TOKEN,
-  CLIENT_ID,
-  GUILD_ID,
-  CANAL_AVISOS
-} = process.env;
-
-const SOPORTE_URL =
-  "https://discord.com/channels/1338912774327238778/1338919287842410516";
+const TOKEN = process.env.TOKEN;
+const CLIENT_ID = process.env.CLIENT_ID;
+const GUILD_ID = process.env.GUILD_ID;
+const CANAL_AVISOS = process.env.CANAL_AVISOS;
 
 /* ================= COMANDOS ================= */
 const commands = [
-  new SlashCommandBuilder()
-    .setName("ayuda")
-    .setDescription("Muestra los comandos disponibles"),
-
-  new SlashCommandBuilder()
-    .setName("info")
-    .setDescription("Información del servidor Argentina RP"),
-
-  new SlashCommandBuilder()
-    .setName("roles")
-    .setDescription("Lista los roles disponibles"),
-
-  new SlashCommandBuilder()
-    .setName("ticket")
-    .setDescription("Cómo crear un ticket"),
-
-  new SlashCommandBuilder()
-    .setName("policia")
-    .setDescription("Ingreso a la Policía de Argentina"),
-
   new SlashCommandBuilder()
     .setName("server")
     .setDescription("Estado del servidor RP")
@@ -70,15 +39,14 @@ const commands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
 ].map(c => c.toJSON());
 
-/* ================= REGISTRAR / ================= */
+/* ================= REGISTRAR ================= */
 const rest = new REST({ version: "10" }).setToken(TOKEN);
-
 (async () => {
   await rest.put(
     Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
     { body: commands }
   );
-  console.log("✅ Comandos registrados");
+  console.log("✅ Comando /server registrado");
 })();
 
 /* ================= READY ================= */
@@ -89,91 +57,23 @@ client.once("ready", () => {
 /* ================= INTERACCIONES ================= */
 client.on(Events.InteractionCreate, async interaction => {
   if (!interaction.isChatInputCommand()) return;
+  if (interaction.commandName !== "server") return;
 
-  /* ---- AYUDA ---- */
-  if (interaction.commandName === "ayuda") {
-    return interaction.reply({
-      content:
-        "🧠 **Comandos disponibles**\n\n" +
-        "• `/info`\n" +
-        "• `/roles`\n" +
-        "• `/ticket`\n" +
-        "• `/policia`\n" +
-        "• `/server activo`\n" +
-        "• `/server cerrado`",
-      ephemeral: true
-    });
-  }
+  try {
+    await interaction.deferReply({ ephemeral: true });
 
-  /* ---- INFO ---- */
-  if (interaction.commandName === "info") {
-    const embed = new EmbedBuilder()
-      .setTitle("🇦🇷 Argentina RP")
-      .setDescription("Servidor de roleplay serio y divertido")
-      .addFields(
-        {
-          name: "🎭 Roles disponibles",
-          value:
-            "• Civil\n• Policía\n• Médico\n• ADAC\n• Abogado/Juez\n• Político"
-        },
-        {
-          name: "💡 Código del servidor",
-          value: "`zaza1ajv`"
-        },
-        {
-          name: "✨ Extras",
-          value:
-            "• Staff activo\n• Eventos y bandas\n• Bienvenidos nuevos jugadores"
-        }
-      )
-      .setColor(0x2f80ed);
+    if (!CANAL_AVISOS) {
+      return interaction.editReply("❌ CANAL_AVISOS no está configurado.");
+    }
 
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setLabel("Soporte General")
-        .setStyle(ButtonStyle.Link)
-        .setURL(SOPORTE_URL)
-    );
-
-    return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
-  }
-
-  /* ---- ROLES ---- */
-  if (interaction.commandName === "roles") {
-    return interaction.reply({
-      content:
-        "🎭 **Roles disponibles**\n• Civil\n• Policía\n• Médico\n• ADAC\n• Abogado/Juez\n• Político",
-      ephemeral: true
-    });
-  }
-
-  /* ---- TICKET ---- */
-  if (interaction.commandName === "ticket") {
-    return interaction.reply({
-      content:
-        "🎫 Para soporte general ingresá acá:\n" + SOPORTE_URL,
-      ephemeral: true
-    });
-  }
-
-  /* ---- POLICIA ---- */
-  if (interaction.commandName === "policia") {
-    return interaction.reply({
-      content:
-        "🚓 **Ingreso a Policía**\n\n" +
-        "• Buen rol civil\n" +
-        "• Sin sanciones activas\n" +
-        "• Crear ticket de **Ser Policía**\n" +
-        SOPORTE_URL,
-      ephemeral: true
-    });
-  }
-
-  /* ---- SERVER ACTIVO / CERRADO ---- */
-  if (interaction.commandName === "server") {
     const canal = await client.channels.fetch(CANAL_AVISOS);
+    if (!canal) {
+      return interaction.editReply("❌ No se pudo encontrar el canal.");
+    }
 
-    if (interaction.options.getSubcommand() === "activo") {
+    const sub = interaction.options.getSubcommand();
+
+    if (sub === "activo") {
       await canal.send(`
 https://www.gifsanimados.org/data/media/562/linea-imagen-animada-0015.gif
 
@@ -187,21 +87,23 @@ El servidor de Argentina RP está ACTIVO**
 
 https://www.gifsanimados.org/data/media/562/linea-imagen-animada-0015.gif
 `);
-      return interaction.reply({ content: "✅ Aviso de servidor activo enviado.", ephemeral: true });
+      return interaction.editReply("✅ Aviso de **servidor activo** enviado.");
     }
 
-    if (interaction.options.getSubcommand() === "cerrado") {
-      await canal.send(`
-🔒 **Servidor cerrado por el momento**
-
-Gracias por participar ❤️  
-Pronto avisaremos cuando vuelva a abrir.
-`);
-      return interaction.reply({ content: "✅ Aviso de servidor cerrado enviado.", ephemeral: true });
+    if (sub === "cerrado") {
+      await canal.send("🔒 **Servidor cerrado por el momento**");
+      return interaction.editReply("✅ Aviso de **servidor cerrado** enviado.");
+    }
+  } catch (err) {
+    console.error("❌ ERROR SERVER:", err);
+    if (!interaction.replied) {
+      await interaction.reply({
+        content: "❌ Ocurrió un error al ejecutar el comando.",
+        ephemeral: true
+      });
     }
   }
 });
 
 /* ================= LOGIN ================= */
 client.login(TOKEN);
-
