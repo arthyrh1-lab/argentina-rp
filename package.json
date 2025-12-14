@@ -1,8 +1,9 @@
 {
   "name": "argentina-rp-bot",
   "version": "1.0.0",
-  "type": "module",
+  "description": "Bot oficial Argentina RP",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "start": "node index.js"
   },
