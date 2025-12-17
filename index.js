@@ -2,64 +2,69 @@ import express from "express";
 import {
   Client,
   GatewayIntentBits,
-  Events,
   SlashCommandBuilder,
   REST,
   Routes,
   EmbedBuilder,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
+  Events,
   PermissionFlagsBits
 } from "discord.js";
 
-/* ================= WEB SERVER ================= */
+/* ================= WEB SERVER (RENDER) ================= */
 const app = express();
-app.get("/", (_, res) => res.send("Argentina RP Bot activo"));
-app.listen(process.env.PORT || 3000);
+const PORT = process.env.PORT || 3000;
 
-/* ================= CLIENT ================= */
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers
-  ]
+app.get("/", (_, res) => {
+  res.send("Argentina RP Bot activo 24/7");
 });
 
-/* ================= ENV ================= */
-const {
-  TOKEN,
-  CLIENT_ID,
-  GUILD_ID,
-  ROL_MOD,
-  CANAL_TICKETS,
-  CANAL_SERVER_ABIERTO,
-  CANAL_SERVER_CERRADO,
-  CANAL_LOGS,
-  CANAL_PLACAS
-} = process.env;
+app.listen(PORT, () => {
+  console.log("🌐 Web server activo en puerto", PORT);
+});
 
-/* ================= PLACAS (MEMORIA) ================= */
-let contadorPlacas = 1;
+/* ================= CLIENTE DISCORD ================= */
+const client = new Client({
+  intents: [GatewayIntentBits.Guilds]
+});
+
+/* ================= VARIABLES ================= */
+const TOKEN = process.env.TOKEN;
+const CLIENT_ID = process.env.CLIENT_ID;
+const GUILD_ID = process.env.GUILD_ID;
+
+const ROLE_MOD = process.env.ROLE_MOD; // ID rol staff/mod
+const CHANNEL_ABIERTO = process.env.CHANNEL_ABIERTO;
+const CHANNEL_CERRADO = process.env.CHANNEL_CERRADO;
+const CHANNEL_LOGS = process.env.CHANNEL_LOGS;
+const CHANNEL_PLACAS = process.env.CHANNEL_PLACAS;
+
+if (!TOKEN || !CLIENT_ID || !GUILD_ID) {
+  console.error("❌ FALTAN VARIABLES DE ENTORNO");
+  process.exit(1);
+}
+
+/* ================= BASE DE DATOS SIMPLE ================= */
 const placas = new Map();
+let contadorPlaca = 1;
 
 /* ================= COMANDOS ================= */
 const commands = [
-  new SlashCommandBuilder().setName("ayuda").setDescription("Comandos"),
-  new SlashCommandBuilder().setName("info").setDescription("Info servidor"),
-  new SlashCommandBuilder().setName("roles").setDescription("Roles"),
+  new SlashCommandBuilder().setName("ayuda").setDescription("Ver comandos"),
+  new SlashCommandBuilder().setName("info").setDescription("Info del servidor"),
+  new SlashCommandBuilder().setName("roles").setDescription("Roles disponibles"),
   new SlashCommandBuilder().setName("ticket").setDescription("Soporte"),
-  new SlashCommandBuilder().setName("policia").setDescription("Postularse policía"),
+  new SlashCommandBuilder().setName("policia").setDescription("Ingreso policía"),
 
   new SlashCommandBuilder()
     .setName("server")
     .setDescription("Abrir o cerrar servidor")
     .addStringOption(o =>
       o.setName("estado")
+        .setDescription("activo o cerrado")
         .setRequired(true)
         .addChoices(
-          { name: "activo", value: "activo" },
-          { name: "cerrado", value: "cerrado" }
+          { name: "Activo", value: "activo" },
+          { name: "Cerrado", value: "cerrado" }
         )
     ),
 
@@ -67,8 +72,7 @@ const commands = [
     .setName("placa")
     .setDescription("Registrar placa")
     .addStringOption(o => o.setName("nombre").setRequired(true))
-    .addStringOption(o => o.setName("rango").setRequired(true))
-    .addAttachmentOption(o => o.setName("foto").setRequired(true)),
+    .addStringOption(o => o.setName("rango").setRequired(true)),
 
   new SlashCommandBuilder()
     .setName("ver-placa")
@@ -78,119 +82,135 @@ const commands = [
   new SlashCommandBuilder()
     .setName("borrar-placa")
     .setDescription("Borrar placa")
-    .addUserOption(o => o.setName("usuario").setRequired(true)),
-
-  new SlashCommandBuilder()
-    .setName("lista-de-placas")
-    .setDescription("Lista de placas")
+    .addUserOption(o => o.setName("usuario").setRequired(true))
 ].map(c => c.toJSON());
 
-/* ================= REGISTRAR ================= */
+/* ================= REGISTRAR COMANDOS ================= */
 const rest = new REST({ version: "10" }).setToken(TOKEN);
-await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), { body: commands });
+await rest.put(
+  Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
+  { body: commands }
+);
 
 /* ================= READY ================= */
 client.once(Events.ClientReady, () => {
-  console.log("Bot listo:", client.user.tag);
+  console.log(`✅ Bot conectado como ${client.user.tag}`);
 });
 
-/* ================= INTERACTIONS ================= */
-client.on(Events.InteractionCreate, async i => {
-  if (!i.isChatInputCommand()) return;
+/* ================= INTERACCIONES ================= */
+client.on(Events.InteractionCreate, async interaction => {
+  if (!interaction.isChatInputCommand()) return;
 
-  const esMod =
-    i.member.permissions.has(PermissionFlagsBits.Administrator) ||
-    i.member.roles.cache.has(ROL_MOD);
+  const { commandName, guild, user } = interaction;
 
-  /* ===== SERVER ===== */
-  if (i.commandName === "server") {
-    if (!esMod) return i.reply({ content: "❌ Sin permiso", ephemeral: true });
+  /* ========== CHECK MOD ========== */
+  const esMod = ROLE_MOD
+    ? interaction.member.roles.cache.has(ROLE_MOD)
+    : interaction.member.permissions.has(PermissionFlagsBits.Administrator);
 
-    const estado = i.options.getString("estado");
-    const canal = await client.channels.fetch(
-      estado === "activo" ? CANAL_SERVER_ABIERTO : CANAL_SERVER_CERRADO
-    );
-
-    const msgActivo = `** ¡Atención, jugadores de Argentina! 🎄🎁 ¡Grandes noticias! La República Argentina va a abrir el servidor!**\n\n||@everyone|| 🌟\n\nCódigo: **zaza1ajv**`;
-    const msgCerrado = `🌙✨ Buenas noches Argentina RP 🇦🇷\nServidor cerrado por hoy.\nNos vemos mañana 💙`;
-
-    await canal.send(estado === "activo" ? msgActivo : msgCerrado);
-
-    const log = await client.channels.fetch(CANAL_LOGS);
-    await log.send(`📢 Server ${estado} por ${i.user}`);
-
-    return i.reply({ content: "✅ Aviso enviado", ephemeral: true });
+  /* ---------- AYUDA ---------- */
+  if (commandName === "ayuda") {
+    return interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setTitle("📘 Comandos")
+          .setDescription(
+            "/info\n/roles\n/ticket\n/policia\n/server\n/placa\n/ver-placa"
+          )
+          .setColor(0x2ecc71)
+      ],
+      ephemeral: true
+    });
   }
 
-  /* ===== PLACA ===== */
-  if (i.commandName === "placa") {
-    const nombre = i.options.getString("nombre");
-    const rango = i.options.getString("rango");
-    const foto = i.options.getAttachment("foto");
+  /* ---------- SERVER ---------- */
+  if (commandName === "server") {
+    if (!esMod)
+      return interaction.reply({ content: "❌ Sin permisos", ephemeral: true });
 
-    const placaId = `P${String(contadorPlacas).padStart(3, "0")}`;
-    contadorPlacas++;
+    const estado = interaction.options.getString("estado");
+    const canal =
+      estado === "activo"
+        ? await guild.channels.fetch(CHANNEL_ABIERTO)
+        : await guild.channels.fetch(CHANNEL_CERRADO);
 
-    placas.set(i.user.id, { nombre, rango, placaId, foto: foto.url });
+    if (!canal)
+      return interaction.reply({ content: "❌ Canal no encontrado", ephemeral: true });
 
-    await i.member.setNickname(`${rango} || ${nombre} #${placaId}`);
+    const mensaje =
+      estado === "activo"
+        ? `**¡Atención jugadores!**\n\nServidor **ABIERTO** 🎉\nCódigo: **zaza1ajv**\n\n||@everyone||`
+        : `🌙 Buenas noches Argentina RP 🇦🇷\nServidor cerrado por hoy.\nGracias a todos ❤️`;
 
-    const canal = await client.channels.fetch(CANAL_PLACAS);
-    const embed = new EmbedBuilder()
-      .setTitle("📋 Placa asignada")
-      .addFields(
-        { name: "Usuario", value: `${i.user}` },
-        { name: "Nombre", value: nombre },
-        { name: "Rango", value: rango },
-        { name: "Placa", value: placaId }
-      )
-      .setImage(foto.url)
-      .setColor(0x3498db);
+    await canal.send(mensaje);
+    await guild.channels.fetch(CHANNEL_LOGS)
+      ?.then(c => c.send(`📝 ${user.tag} cambió estado a **${estado}**`));
 
-    await canal.send({ embeds: [embed] });
-    return i.reply({ content: "✅ Placa registrada", ephemeral: true });
+    return interaction.reply({ content: "✅ Listo", ephemeral: true });
   }
 
-  /* ===== VER PLACA ===== */
-  if (i.commandName === "ver-placa") {
-    if (!esMod) return i.reply({ content: "❌ Sin permiso", ephemeral: true });
+  /* ---------- PLACA ---------- */
+  if (commandName === "placa") {
+    const nombre = interaction.options.getString("nombre");
+    const rango = interaction.options.getString("rango");
 
-    const u = i.options.getUser("usuario");
-    const p = placas.get(u.id);
-    if (!p) return i.reply({ content: "❌ No tiene placa", ephemeral: true });
+    const placa = `P${String(contadorPlaca).padStart(3, "0")}`;
+    contadorPlaca++;
 
-    const embed = new EmbedBuilder()
-      .setTitle("🔎 Placa")
-      .addFields(
-        { name: "Usuario", value: `${u}` },
-        { name: "Nombre", value: p.nombre },
-        { name: "Rango", value: p.rango },
-        { name: "Placa", value: p.placaId }
-      )
-      .setImage(p.foto);
+    placas.set(user.id, { nombre, rango, placa });
 
-    return i.reply({ embeds: [embed], ephemeral: true });
+    await interaction.member.setNickname(`${rango} || ${nombre} #${placa}`);
+
+    await guild.channels.fetch(CHANNEL_PLACAS)
+      ?.then(c =>
+        c.send(
+          `📋 **Nueva placa**\nUsuario: ${user}\nRango: ${rango}\nPlaca: ${placa}`
+        )
+      );
+
+    return interaction.reply({
+      content: `✅ Placa asignada: **${placa}**`,
+      ephemeral: true
+    });
   }
 
-  /* ===== BORRAR ===== */
-  if (i.commandName === "borrar-placa") {
-    if (!esMod) return i.reply({ content: "❌ Sin permiso", ephemeral: true });
+  /* ---------- VER PLACA ---------- */
+  if (commandName === "ver-placa") {
+    if (!esMod)
+      return interaction.reply({ content: "❌ Sin permisos", ephemeral: true });
 
-    const u = i.options.getUser("usuario");
+    const u = interaction.options.getUser("usuario");
+    const data = placas.get(u.id);
+
+    if (!data)
+      return interaction.reply({ content: "❌ Sin placa", ephemeral: true });
+
+    return interaction.reply({
+      embeds: [
+        new EmbedBuilder()
+          .setTitle("🪪 Placa")
+          .addFields(
+            { name: "Usuario", value: `${u}` },
+            { name: "Nombre", value: data.nombre },
+            { name: "Rango", value: data.rango },
+            { name: "Placa", value: data.placa }
+          )
+          .setColor(0x3498db)
+      ],
+      ephemeral: true
+    });
+  }
+
+  /* ---------- BORRAR PLACA ---------- */
+  if (commandName === "borrar-placa") {
+    if (!esMod)
+      return interaction.reply({ content: "❌ Sin permisos", ephemeral: true });
+
+    const u = interaction.options.getUser("usuario");
     placas.delete(u.id);
-    return i.reply({ content: "🗑️ Placa borrada", ephemeral: true });
-  }
-
-  /* ===== LISTA ===== */
-  if (i.commandName === "lista-de-placas") {
-    if (!esMod) return i.reply({ content: "❌ Sin permiso", ephemeral: true });
-
-    const lista = [...placas.entries()]
-      .map(([_, p]) => `${p.placaId} - ${p.nombre} (${p.rango})`)
-      .join("\n") || "Sin placas";
-
-    return i.reply({ content: "📄 **Placas:**\n" + lista, ephemeral: true });
+    return interaction.reply({ content: "🗑️ Placa eliminada", ephemeral: true });
   }
 });
 
+/* ================= LOGIN ================= */
 client.login(TOKEN);
