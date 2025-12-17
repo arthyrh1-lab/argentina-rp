@@ -5,61 +5,64 @@ import {
   Routes,
   SlashCommandBuilder,
   EmbedBuilder,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  Events,
-  PermissionFlagsBits
+  Events
 } from "discord.js";
 import express from "express";
 
-/* ================= HTTP 24/7 ================= */
-const app = express();
-app.get("/", (req, res) => res.send("Argentina RP Bot 24/7 activo"));
-app.listen(process.env.PORT || 3000);
+/* ================== ANTI CRASH ================== */
+process.on("unhandledRejection", e => console.error(e));
+process.on("uncaughtException", e => console.error(e));
 
-/* ================= CLIENTE ================= */
+/* ================== HTTP 24/7 ================== */
+const app = express();
+
+app.get("/", (req, res) => {
+  res.send("Argentina RP Bot activo 24/7");
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () =>
+  console.log("🌐 Web server activo en puerto", PORT)
+);
+
+/* ================== CLIENTE ================== */
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-/* ================= VARIABLES ================= */
+/* ================== VARIABLES ================== */
 const {
   TOKEN,
   CLIENT_ID,
   GUILD_ID,
   CANAL_SERVER_ACTIVO,
   CANAL_SERVER_CERRADO,
-  CANAL_LOGS_SERVER
+  CANAL_LOGS_SERVER,
+  ROL_MOD_ID
 } = process.env;
 
-const SOPORTE_URL =
-  "https://discord.com/channels/1338912774327238778/1338919287842410516";
-
-const LINK_JUEGO =
-  "https://www.roblox.com/es/games/7711635737/Emergency-Hamburg?universeId=2992873140";
-
-/* ================= COMANDOS ================= */
+/* ================== COMANDOS ================== */
 const commands = [
-  new SlashCommandBuilder().setName("ayuda").setDescription("Muestra los comandos disponibles"),
-
-  new SlashCommandBuilder().setName("info").setDescription("Información del servidor Argentina RP"),
-
-  new SlashCommandBuilder().setName("roles").setDescription("Lista los roles disponibles"),
-
-  new SlashCommandBuilder().setName("ticket").setDescription("Cómo crear un ticket"),
-
-  new SlashCommandBuilder().setName("policia").setDescription("Ingreso a la Policía de Argentina"),
-
+  new SlashCommandBuilder().setName("ayuda").setDescription("Comandos disponibles"),
+  new SlashCommandBuilder().setName("info").setDescription("Información del servidor"),
+  new SlashCommandBuilder().setName("roles").setDescription("Roles disponibles"),
+  new SlashCommandBuilder().setName("ticket").setDescription("Sistema de tickets"),
+  new SlashCommandBuilder().setName("policia").setDescription("Ingreso a Policía"),
   new SlashCommandBuilder()
     .setName("server")
-    .setDescription("Estado del servidor")
-    .addSubcommand(s => s.setName("activo").setDescription("Anunciar servidor activo"))
-    .addSubcommand(s => s.setName("cerrado").setDescription("Anunciar servidor cerrado"))
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .setDescription("Abrir o cerrar servidor")
+    .addStringOption(o =>
+      o.setName("estado")
+        .setDescription("Estado del servidor")
+        .setRequired(true)
+        .addChoices(
+          { name: "activo", value: "activo" },
+          { name: "cerrado", value: "cerrado" }
+        )
+    )
 ].map(c => c.toJSON());
 
-/* ================= REGISTRAR COMANDOS ================= */
+/* ================== REGISTRAR COMANDOS ================== */
 const rest = new REST({ version: "10" }).setToken(TOKEN);
 
 (async () => {
@@ -70,133 +73,83 @@ const rest = new REST({ version: "10" }).setToken(TOKEN);
   console.log("✅ Comandos registrados");
 })();
 
-/* ================= READY ================= */
+/* ================== READY ================== */
 client.once("ready", () => {
   console.log(`🤖 Conectado como ${client.user.tag}`);
 });
 
-/* ================= INTERACCIONES ================= */
+/* ================== INTERACCIONES ================== */
 client.on(Events.InteractionCreate, async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
-  const user = interaction.user;
-
-  /* ================= AYUDA ================= */
-  if (interaction.commandName === "ayuda") {
-    const embed = new EmbedBuilder()
-      .setTitle("🧠 Ayuda | Argentina RP")
-      .setDescription("Estos son los comandos disponibles:")
-      .addFields(
-        { name: "/info", value: "Información del servidor" },
-        { name: "/roles", value: "Roles disponibles" },
-        { name: "/ticket", value: "Contactar al staff" },
-        { name: "/policia", value: "Ingreso a la policía" },
-        { name: "/server activo", value: "Anunciar servidor activo (staff)" },
-        { name: "/server cerrado", value: "Anunciar servidor cerrado (staff)" }
-      )
-      .setColor(0x3498db);
-
-    return interaction.reply({ embeds: [embed], ephemeral: true });
-  }
-
-  /* ================= INFO ================= */
-  if (interaction.commandName === "info") {
-    const embed = new EmbedBuilder()
-      .setTitle("🇦🇷 Argentina RP")
-      .setDescription("Servidor de roleplay serio, activo y organizado.")
-      .addFields(
-        {
-          name: "🎭 Roles",
-          value: "Civil\nPolicía\nMédico\nADAC\nAbogado/Juez\nPolítico"
-        },
-        { name: "🎮 Código", value: "`zaza1ajv`" }
-      )
-      .setColor(0x2ecc71);
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setLabel("Soporte")
-        .setStyle(ButtonStyle.Link)
-        .setURL(SOPORTE_URL)
-    );
-
-    return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
-  }
-
-  /* ================= ROLES ================= */
-  if (interaction.commandName === "roles") {
-    const embed = new EmbedBuilder()
-      .setTitle("🎭 Roles Disponibles")
-      .setDescription(
-        "• Civil\n• Policía\n• Médico\n• ADAC\n• Abogado/Juez\n• Político"
-      )
-      .setColor(0xf1c40f);
-
-    return interaction.reply({ embeds: [embed], ephemeral: true });
-  }
-
-  /* ================= TICKET ================= */
-  if (interaction.commandName === "ticket") {
-    const embed = new EmbedBuilder()
-      .setTitle("🎫 Sistema de Tickets")
-      .setDescription(
-        "Para comunicarte con el staff abrí un ticket en el canal correspondiente."
-      )
-      .setColor(0xe67e22);
-
-    return interaction.reply({ embeds: [embed], ephemeral: true });
-  }
-
-  /* ================= POLICIA ================= */
-  if (interaction.commandName === "policia") {
-    const embed = new EmbedBuilder()
-      .setTitle("🚓 Ingreso a la Policía")
-      .setDescription(
-        "• Buen rol civil\n• Sin sanciones\n• DNI y licencia activa\n• Crear ticket Policía"
-      )
-      .setColor(0xe74c3c);
-
-    return interaction.reply({ embeds: [embed], ephemeral: true });
-  }
-
-  /* ================= SERVER ================= */
+  /* ---- PERMISOS SERVER ---- */
   if (interaction.commandName === "server") {
-    const sub = interaction.options.getSubcommand();
-    const canalLogs = await client.channels.fetch(CANAL_LOGS_SERVER);
+    if (!interaction.member.roles.cache.has(ROL_MOD_ID)) {
+      return interaction.reply({
+        content: "❌ No tenés permisos para usar este comando.",
+        ephemeral: true
+      });
+    }
 
-    if (sub === "activo") {
+    const estado = interaction.options.getString("estado");
+
+    if (estado === "activo") {
       const canal = await client.channels.fetch(CANAL_SERVER_ACTIVO);
 
       await canal.send(
-        "**¡Atención, jugadores de Argentina! 🎄🎁 ¡Grandes noticias!**\n\n" +
-        "El servidor está **ABIERTO** para todos.\n\n" +
-        "||@everyone|| 🌟\n\n" +
-        "🎮 Código: `zaza1ajv`\n" +
-        "🔗 " + LINK_JUEGO
+        `** ¡Atención, jugadores de Argentina! 🎄🎁 ¡Grandes noticias! La República Argentina va a abrir el servidor para que todos puedan unirse y disfrutar de la mejor experiencia de juego. ¡Prepárense para formar equipos, competir y vivir aventuras épicas juntos! No importa si eres un jugador novato o un experto, ¡todos son bienvenidos! Así que ajusta tus controles, invita a tus amigos y ¡vamos a jugar! 🎆🥂**\n\n||@everyone|| 🌟\n\n🔑 **Código:** \`zaza1ajv\`\n🔗 https://www.roblox.com/es/games/7711635737`
       );
 
-      await canalLogs.send(
-        `🟢 Servidor ABIERTO\n👤 ${user.tag}\n🕒 <t:${Math.floor(Date.now()/1000)}:F>`
-      );
+      await client.channels.fetch(CANAL_LOGS_SERVER)
+        .then(c => c.send(`🟢 ${interaction.user.tag} abrió el servidor`));
 
-      return interaction.reply({ content: "✅ Servidor anunciado como ACTIVO", ephemeral: true });
+      return interaction.reply({ content: "✅ Servidor abierto", ephemeral: true });
     }
 
-    const canal = await client.channels.fetch(CANAL_SERVER_CERRADO);
+    if (estado === "cerrado") {
+      const canal = await client.channels.fetch(CANAL_SERVER_CERRADO);
 
-    await canal.send(
-      "🌙✨ **Buenas noches Argentina RP**\n\n" +
-      "El servidor ya se encuentra **cerrado por hoy** ⛔\n\n" +
-      "Gracias por el rol ❤️\nNos vemos mañana 🇦🇷"
-    );
+      await canal.send(
+        "🌙✨ **MUY BUENAS NOCHES, ARGENTINA RP 🇦🇷🔥**\n\nGracias por rolear hoy ❤️\nMañana volvemos con todo 🚀"
+      );
 
-    await canalLogs.send(
-      `🔴 Servidor CERRADO\n👤 ${user.tag}\n🕒 <t:${Math.floor(Date.now()/1000)}:F>`
-    );
+      await client.channels.fetch(CANAL_LOGS_SERVER)
+        .then(c => c.send(`🔴 ${interaction.user.tag} cerró el servidor`));
 
-    return interaction.reply({ content: "✅ Servidor anunciado como CERRADO", ephemeral: true });
+      return interaction.reply({ content: "🔒 Servidor cerrado", ephemeral: true });
+    }
   }
+
+  /* ---- COMANDOS NORMALES ---- */
+  const embed = new EmbedBuilder().setColor(0x2f80ed);
+
+  if (interaction.commandName === "ayuda") {
+    embed.setTitle("🧠 Ayuda")
+      .setDescription("/info\n/roles\n/ticket\n/policia\n/server");
+  }
+
+  if (interaction.commandName === "info") {
+    embed.setTitle("🇦🇷 Argentina RP")
+      .setDescription("Servidor de roleplay serio y activo");
+  }
+
+  if (interaction.commandName === "roles") {
+    embed.setTitle("🎭 Roles")
+      .setDescription("Civil\nPolicía\nMédico\nADAC");
+  }
+
+  if (interaction.commandName === "ticket") {
+    embed.setTitle("🎫 Tickets")
+      .setDescription("Usá el canal de tickets");
+  }
+
+  if (interaction.commandName === "policia") {
+    embed.setTitle("🚓 Policía")
+      .setDescription("Buen rol, sin sanciones, ticket abierto");
+  }
+
+  return interaction.reply({ embeds: [embed], ephemeral: true });
 });
 
-/* ================= LOGIN ================= */
+/* ================== LOGIN ================== */
 client.login(TOKEN);
