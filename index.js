@@ -13,190 +13,184 @@ import {
   PermissionFlagsBits
 } from "discord.js";
 
-/* ================= WEB SERVER (RENDER) ================= */
+/* ================= WEB SERVER ================= */
 const app = express();
-const PORT = process.env.PORT || 3000;
-
-app.get("/", (req, res) => {
-  res.send("🤖 Argentina RP Bot activo 24/7");
-});
-
-app.listen(PORT, () => {
-  console.log("🌐 Web server activo en puerto", PORT);
-});
+app.get("/", (_, res) => res.send("Argentina RP Bot activo"));
+app.listen(process.env.PORT || 3000);
 
 /* ================= CLIENT ================= */
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers
+  ]
 });
 
-/* ================= VARIABLES ENV ================= */
+/* ================= ENV ================= */
 const {
   TOKEN,
   CLIENT_ID,
   GUILD_ID,
+  ROL_MOD,
+  CANAL_TICKETS,
   CANAL_SERVER_ABIERTO,
   CANAL_SERVER_CERRADO,
   CANAL_LOGS,
-  ROL_MOD,
-  CANAL_TICKETS
+  CANAL_PLACAS
 } = process.env;
 
-if (!TOKEN || !CLIENT_ID || !GUILD_ID) {
-  console.error("❌ Faltan variables obligatorias");
-  process.exit(1);
-}
+/* ================= PLACAS (MEMORIA) ================= */
+let contadorPlacas = 1;
+const placas = new Map();
 
 /* ================= COMANDOS ================= */
 const commands = [
-  new SlashCommandBuilder().setName("ayuda").setDescription("Lista de comandos"),
-  new SlashCommandBuilder().setName("info").setDescription("Info del servidor"),
-  new SlashCommandBuilder().setName("roles").setDescription("Roles disponibles"),
-  new SlashCommandBuilder().setName("ticket").setDescription("Abrir ticket"),
-  new SlashCommandBuilder().setName("policia").setDescription("Postularse a policía"),
+  new SlashCommandBuilder().setName("ayuda").setDescription("Comandos"),
+  new SlashCommandBuilder().setName("info").setDescription("Info servidor"),
+  new SlashCommandBuilder().setName("roles").setDescription("Roles"),
+  new SlashCommandBuilder().setName("ticket").setDescription("Soporte"),
+  new SlashCommandBuilder().setName("policia").setDescription("Postularse policía"),
 
   new SlashCommandBuilder()
     .setName("server")
     .setDescription("Abrir o cerrar servidor")
-    .addStringOption(opt =>
-      opt
-        .setName("estado")
-        .setDescription("Estado del servidor")
+    .addStringOption(o =>
+      o.setName("estado")
         .setRequired(true)
         .addChoices(
           { name: "activo", value: "activo" },
           { name: "cerrado", value: "cerrado" }
         )
-    )
+    ),
+
+  new SlashCommandBuilder()
+    .setName("placa")
+    .setDescription("Registrar placa")
+    .addStringOption(o => o.setName("nombre").setRequired(true))
+    .addStringOption(o => o.setName("rango").setRequired(true))
+    .addAttachmentOption(o => o.setName("foto").setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName("ver-placa")
+    .setDescription("Ver placa de un usuario")
+    .addUserOption(o => o.setName("usuario").setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName("borrar-placa")
+    .setDescription("Borrar placa")
+    .addUserOption(o => o.setName("usuario").setRequired(true)),
+
+  new SlashCommandBuilder()
+    .setName("lista-de-placas")
+    .setDescription("Lista de placas")
 ].map(c => c.toJSON());
 
-/* ================= REGISTRAR COMANDOS ================= */
+/* ================= REGISTRAR ================= */
 const rest = new REST({ version: "10" }).setToken(TOKEN);
-
-(async () => {
-  try {
-    await rest.put(
-      Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID),
-      { body: commands }
-    );
-    console.log("✅ Comandos registrados");
-  } catch (e) {
-    console.error("❌ Error registrando comandos", e);
-  }
-})();
+await rest.put(Routes.applicationGuildCommands(CLIENT_ID, GUILD_ID), { body: commands });
 
 /* ================= READY ================= */
 client.once(Events.ClientReady, () => {
-  console.log(`✅ Bot conectado como ${client.user.tag}`);
+  console.log("Bot listo:", client.user.tag);
 });
 
-/* ================= INTERACCIONES ================= */
-client.on(Events.InteractionCreate, async interaction => {
-  if (!interaction.isChatInputCommand()) return;
+/* ================= INTERACTIONS ================= */
+client.on(Events.InteractionCreate, async i => {
+  if (!i.isChatInputCommand()) return;
 
-  /* ===== AYUDA ===== */
-  if (interaction.commandName === "ayuda") {
-    const embed = new EmbedBuilder()
-      .setTitle("🧠 Comandos disponibles")
-      .setDescription(
-        "/info\n/roles\n/ticket\n/policia\n/server activo|cerrado"
-      )
-      .setColor(0x3498db);
+  const esMod =
+    i.member.permissions.has(PermissionFlagsBits.Administrator) ||
+    i.member.roles.cache.has(ROL_MOD);
 
-    return interaction.reply({ embeds: [embed], ephemeral: true });
-  }
+  /* ===== SERVER ===== */
+  if (i.commandName === "server") {
+    if (!esMod) return i.reply({ content: "❌ Sin permiso", ephemeral: true });
 
-  /* ===== INFO ===== */
-  if (interaction.commandName === "info") {
-    const embed = new EmbedBuilder()
-      .setTitle("🇦🇷 Argentina RP")
-      .setDescription("Servidor de roleplay serio y activo")
-      .addFields(
-        { name: "💡 Código", value: "`zaza1ajv`" },
-        { name: "🎮 Juego", value: "Emergency Hamburg" }
-      )
-      .setColor(0x2ecc71);
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setLabel("Soporte")
-        .setStyle(ButtonStyle.Link)
-        .setURL(CANAL_TICKETS)
+    const estado = i.options.getString("estado");
+    const canal = await client.channels.fetch(
+      estado === "activo" ? CANAL_SERVER_ABIERTO : CANAL_SERVER_CERRADO
     );
 
-    return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
-  }
+    const msgActivo = `** ¡Atención, jugadores de Argentina! 🎄🎁 ¡Grandes noticias! La República Argentina va a abrir el servidor!**\n\n||@everyone|| 🌟\n\nCódigo: **zaza1ajv**`;
+    const msgCerrado = `🌙✨ Buenas noches Argentina RP 🇦🇷\nServidor cerrado por hoy.\nNos vemos mañana 💙`;
 
-  /* ===== ROLES ===== */
-  if (interaction.commandName === "roles") {
-    const embed = new EmbedBuilder()
-      .setTitle("🎭 Roles")
-      .setDescription("Civil\nPolicía\nMédico\nADAC\nAbogado\nPolítico")
-      .setColor(0x9b59b6);
-
-    return interaction.reply({ embeds: [embed], ephemeral: true });
-  }
-
-  /* ===== TICKET ===== */
-  if (interaction.commandName === "ticket") {
-    const embed = new EmbedBuilder()
-      .setTitle("🎫 Soporte")
-      .setDescription("Abrí un ticket en el canal correspondiente")
-      .setColor(0xf1c40f);
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setLabel("Abrir Ticket")
-        .setStyle(ButtonStyle.Link)
-        .setURL(CANAL_TICKETS)
-    );
-
-    return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
-  }
-
-  /* ===== POLICIA ===== */
-  if (interaction.commandName === "policia") {
-    const embed = new EmbedBuilder()
-      .setTitle("🚓 Policía Argentina")
-      .setDescription("Postulate abriendo un ticket y seleccionando **Ser Policía**")
-      .setColor(0xe74c3c);
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setLabel("Postularse")
-        .setStyle(ButtonStyle.Link)
-        .setURL(CANAL_TICKETS)
-    );
-
-    return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
-  }
-
-  /* ===== SERVER ACTIVO / CERRADO ===== */
-  if (interaction.commandName === "server") {
-    if (!interaction.member.roles.cache.has(ROL_MOD)) {
-      return interaction.reply({ content: "❌ No tenés permiso", ephemeral: true });
-    }
-
-    const estado = interaction.options.getString("estado");
-    const canalId =
-      estado === "activo" ? CANAL_SERVER_ABIERTO : CANAL_SERVER_CERRADO;
-
-    const canal = await client.channels.fetch(canalId);
-
-    const mensajeActivo = `** ¡Atención, jugadores de Argentina! 🎄🎁 ¡Grandes noticias! La República Argentina va a abrir el servidor para que todos puedan unirse y disfrutar de la mejor experiencia de juego. ¡Prepárense para formar equipos, competir y vivir aventuras épicas juntos!**\n\n||@everyone|| 🌟\n\nCódigo: **zaza1ajv**`;
-
-    const mensajeCerrado = `🌙✨ **Buenas noches Argentina RP** 🇦🇷\n\nEl servidor ya se encuentra cerrado por hoy.\nGracias a todos por el rol ❤️\n\nNos vemos mañana 💙`;
-
-    await canal.send(estado === "activo" ? mensajeActivo : mensajeCerrado);
+    await canal.send(estado === "activo" ? msgActivo : msgCerrado);
 
     const log = await client.channels.fetch(CANAL_LOGS);
-    await log.send(
-      `📢 **Server ${estado.toUpperCase()}**\nEjecutado por: ${interaction.user}`
-    );
+    await log.send(`📢 Server ${estado} por ${i.user}`);
 
-    return interaction.reply({ content: "✅ Aviso enviado", ephemeral: true });
+    return i.reply({ content: "✅ Aviso enviado", ephemeral: true });
+  }
+
+  /* ===== PLACA ===== */
+  if (i.commandName === "placa") {
+    const nombre = i.options.getString("nombre");
+    const rango = i.options.getString("rango");
+    const foto = i.options.getAttachment("foto");
+
+    const placaId = `P${String(contadorPlacas).padStart(3, "0")}`;
+    contadorPlacas++;
+
+    placas.set(i.user.id, { nombre, rango, placaId, foto: foto.url });
+
+    await i.member.setNickname(`${rango} || ${nombre} #${placaId}`);
+
+    const canal = await client.channels.fetch(CANAL_PLACAS);
+    const embed = new EmbedBuilder()
+      .setTitle("📋 Placa asignada")
+      .addFields(
+        { name: "Usuario", value: `${i.user}` },
+        { name: "Nombre", value: nombre },
+        { name: "Rango", value: rango },
+        { name: "Placa", value: placaId }
+      )
+      .setImage(foto.url)
+      .setColor(0x3498db);
+
+    await canal.send({ embeds: [embed] });
+    return i.reply({ content: "✅ Placa registrada", ephemeral: true });
+  }
+
+  /* ===== VER PLACA ===== */
+  if (i.commandName === "ver-placa") {
+    if (!esMod) return i.reply({ content: "❌ Sin permiso", ephemeral: true });
+
+    const u = i.options.getUser("usuario");
+    const p = placas.get(u.id);
+    if (!p) return i.reply({ content: "❌ No tiene placa", ephemeral: true });
+
+    const embed = new EmbedBuilder()
+      .setTitle("🔎 Placa")
+      .addFields(
+        { name: "Usuario", value: `${u}` },
+        { name: "Nombre", value: p.nombre },
+        { name: "Rango", value: p.rango },
+        { name: "Placa", value: p.placaId }
+      )
+      .setImage(p.foto);
+
+    return i.reply({ embeds: [embed], ephemeral: true });
+  }
+
+  /* ===== BORRAR ===== */
+  if (i.commandName === "borrar-placa") {
+    if (!esMod) return i.reply({ content: "❌ Sin permiso", ephemeral: true });
+
+    const u = i.options.getUser("usuario");
+    placas.delete(u.id);
+    return i.reply({ content: "🗑️ Placa borrada", ephemeral: true });
+  }
+
+  /* ===== LISTA ===== */
+  if (i.commandName === "lista-de-placas") {
+    if (!esMod) return i.reply({ content: "❌ Sin permiso", ephemeral: true });
+
+    const lista = [...placas.entries()]
+      .map(([_, p]) => `${p.placaId} - ${p.nombre} (${p.rango})`)
+      .join("\n") || "Sin placas";
+
+    return i.reply({ content: "📄 **Placas:**\n" + lista, ephemeral: true });
   }
 });
 
-/* ================= LOGIN ================= */
 client.login(TOKEN);
