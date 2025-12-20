@@ -11,7 +11,6 @@ import {
   PermissionFlagsBits
 } from "discord.js";
 
-/* ================= WEB SERVER ================= */
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -28,7 +27,6 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds]
 });
 
-/* ================= ENV ================= */
 const {
   TOKEN,
   CLIENT_ID,
@@ -36,7 +34,7 @@ const {
   ROL_MOD,
   CANAL_SERVER_ABIERTO,
   CANAL_SERVER_CERRADO,
-  CANAL_LOGS
+  CANAL_LOGS,
 } = process.env;
 
 if (!TOKEN || !CLIENT_ID || !GUILD_ID) {
@@ -44,7 +42,6 @@ if (!TOKEN || !CLIENT_ID || !GUILD_ID) {
   process.exit(1);
 }
 
-/* ================= PLACAS ================= */
 const PLACAS_FILE = "./placas.json";
 
 function leerPlacas() {
@@ -55,7 +52,6 @@ function guardarPlacas(data) {
   fs.writeFileSync(PLACAS_FILE, JSON.stringify(data, null, 2));
 }
 
-/* ================= COMANDOS ================= */
 const commands = [
   new SlashCommandBuilder().setName("ayuda").setDescription("Ver comandos"),
   new SlashCommandBuilder().setName("info").setDescription("Info del servidor"),
@@ -149,7 +145,7 @@ client.on(Events.InteractionCreate, async interaction => {
     const mensaje =
       sub === "activo"
         ? `**¡Atención jugadores! 🎄🎁**\n\nServidor ABIERTO\n\n||@everyone||\n\nCódigo: **zaza1ajv**`
-        : `🌙✨ **Buenas noches Argentina RP**\n\nServidor cerrado por hoy ❤️`;
+        : `🌙✨ **Buenas noches Argentina RP**\n\nServidor cerrado por hoy nos vemos mañana ❤️`;
 
     const channel = await client.channels.fetch(canal);
     await channel.send(mensaje);
@@ -204,14 +200,15 @@ client.on(Events.InteractionCreate, async interaction => {
             { name: "Usuario", value: `<@${user.id}>` },
             { name: "Nombre", value: p.nombre },
             { name: "Rango", value: p.rango },
-            { name: "Placa", value: p.placa }
+            { name: "Placa", value: p.placa },
+            { name: "Foto", value: p.foto },
+
           )
           .setColor(0x2ecc71)
       ]
     });
   }
 
-  /* ===== LISTA ===== */
   if (interaction.commandName === "lista-placas") {
     const data = leerPlacas();
     const lista = Object.values(data.placas)
@@ -228,18 +225,16 @@ client.on(Events.InteractionCreate, async interaction => {
     });
   }
 
-  /* ===== BORRAR ===== */
   if (interaction.commandName === "borrar-placa") {
-    if (!isMod) return interaction.reply({ content: "❌ Sin permisos", ephemeral: true });
+    if (!isMod) return interaction.reply({ content: "❌ No tiene autorización", ephemeral: true });
 
     const user = interaction.options.getUser("usuario");
     const data = leerPlacas();
     delete data.placas[user.id];
     guardarPlacas(data);
 
-    return interaction.reply({ content: "🗑️ Placa borrada", ephemeral: true });
+    return interaction.reply({ content: "🗑️ Placa eliminada   ", ephemeral: true });
   }
 });
 
-/* ================= LOGIN ================= */
 client.login(TOKEN);
